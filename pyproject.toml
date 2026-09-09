@@ -1,0 +1,63 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "music-discovery-engine"
+version = "0.1.0"
+description = "Local-first semantic music discovery over authorized audio files"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+authors = [{ name = "Music Search contributors" }]
+dependencies = [
+  "alembic>=1.13,<2",
+  "librosa>=0.10.2,<1",
+  "numpy>=1.26,<3",
+  "pgvector>=0.3,<1",
+  "psycopg[binary]>=3.2,<4",
+  "pydantic-settings>=2.5,<3",
+  "rich>=13.7,<15",
+  "scipy>=1.12,<2",
+  "soundfile>=0.12,<1",
+  "sqlalchemy>=2.0,<3",
+  "torch>=2.3,<3",
+  "transformers>=4.44,<5",
+  "typer>=0.12,<1",
+]
+
+[project.scripts]
+music-search = "music_search.cli:app"
+
+[dependency-groups]
+dev = [
+  "mypy>=1.11,<2",
+  "pytest>=8.3,<9",
+  "pytest-cov>=5,<7",
+  "ruff>=0.6,<1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/music_search"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"migrations" = "music_search/_migrations"
+"alembic.ini" = "music_search/_alembic.ini"
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-markers"
+testpaths = ["tests"]
+markers = [
+  "integration: requires external services such as PostgreSQL",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/music_search"]

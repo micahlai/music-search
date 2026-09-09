@@ -1,0 +1,28 @@
+.DS_Store
+.env
+.idea/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+__pycache__/
+*.egg-info/
+*.py[cod]
+.coverage
+coverage.xml
+dist/
+build/
+
+# Model and audio artifacts are local inputs, never repository assets.
+audio/
+models/
+*.aac
+*.flac
+*.m4a
+*.mp3
+*.ogg
+*.opus
+*.wav
+
+# Local graphify analysis is a developer artifact.
+graphify-out/
