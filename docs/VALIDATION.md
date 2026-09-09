@@ -3,6 +3,12 @@
 Date: 2026-09-09. This record covers the initial local prototype and planning
 documents. It does not assert production readiness or measured music relevance.
 
+**Current update:** the previously pending live gates below are now exercised.
+PostgreSQL 17.11/pgvector 0.8.6 are running locally, all 53 tests passed, and real
+CLAP ingestion/search succeeded on 20 tracks (881 segments). See the subsequent
+[live smoke-test report](SMOKE_TEST.md) and [local setup](LOCAL_DATABASE.md).
+The initial review/check results below are retained as historical evidence.
+
 ## Independent documentation review
 
 The scope, specification, architecture, milestones, roadmap, and README were reviewed
@@ -47,7 +53,7 @@ preprocessing, mocked model loading/inference, normalization, database validatio
 SQL construction, ingest failures/restarts, track grouping/model filtering, BPM
 provenance, and CLI behavior. No test downloaded a pretrained checkpoint.
 
-## Pending live gates
+## Live gates pending at the initial review (now exercised)
 
 The live database integration test is skipped unless
 `MUSIC_SEARCH_TEST_DATABASE_URL` explicitly names a disposable pgvector database.

@@ -92,6 +92,10 @@ def ingest(
         bool,
         typer.Option(help="Stop after the first file that fails analysis."),
     ] = False,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose/--quiet", help="Show live file, stage, and batch progress."),
+    ] = True,
 ) -> None:
     """Analyze a folder of audio that you are authorized to process."""
 
@@ -109,6 +113,9 @@ def ingest(
             sample_rate=settings.sample_rate,
             window_seconds=settings.window_seconds,
             stride_seconds=settings.stride_seconds,
+            on_progress=(lambda message: console.print(message, markup=False, highlight=False))
+            if verbose
+            else None,
         )
         summary = service.ingest_path(
             path,

@@ -21,6 +21,10 @@ Spotify and YouTube modules are future **metadata-only** connector placeholders.
 
 ## Quick start
 
+On this Mac, PostgreSQL + pgvector has also been configured directly with Homebrew.
+Use [local database instructions](docs/LOCAL_DATABASE.md) for that setup; Docker is
+not required when the native service is running.
+
 Use Python 3.11–3.13, [uv](https://docs.astral.sh/uv/), and Docker Compose.
 Run these commands from the repository root:
 
@@ -61,6 +65,10 @@ uv run music-search ingest ./audio --force
 
 # Stop after the first failed file.
 uv run music-search ingest ./audio --fail-fast
+
+# Ingestion is verbose by default: file/stage/batch progress and elapsed times.
+# Use --quiet to keep only the final result table and totals.
+uv run music-search ingest ./audio --quiet
 
 # Interactive prompt and JSON output for scripts.
 uv run music-search search

@@ -108,7 +108,8 @@ def test_embed_audio_batches_normalizes_and_forwards_sample_rate(
     embedder = ClapEmbedder(device="cpu", batch_size=2)
     audios = [np.linspace(-1.0, 1.0, length, dtype=np.float32) for length in (16, 24, 32)]
 
-    vectors = embedder.embed_audio(audios, sample_rate=16_000)
+    progress: list[str] = []
+    vectors = embedder.embed_audio(audios, sample_rate=16_000, on_progress=progress.append)
 
     assert vectors.shape == (3, CLAP_EMBEDDING_DIM)
     assert vectors.dtype == np.float32
@@ -116,6 +117,11 @@ def test_embed_audio_batches_normalizes_and_forwards_sample_rate(
     np.testing.assert_allclose(np.linalg.norm(vectors, axis=1), 1.0, atol=1e-6)
     np.testing.assert_allclose(vectors[:, :2], np.array([[0.6, 0.8]] * 3), atol=1e-6)
     assert state.audio_batch_sizes == [2, 1]
+    assert "Loading CLAP" in progress[0]
+    assert any("ready on cpu" in message for message in progress)
+    assert [
+        message.split(" windows")[0].strip() for message in progress if " windows" in message
+    ] == ["CLAP: 2/3", "CLAP: 3/3"]
     assert [call["sampling_rate"] for call in state.processor_calls] == [16_000, 16_000]
     assert [len(call["audios"]) for call in state.processor_calls] == [2, 1]
 

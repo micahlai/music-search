@@ -7,9 +7,10 @@ and do not initialize an accelerator or download a model.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import nullcontext
 from threading import Lock
+from time import perf_counter
 from typing import Any
 
 import numpy as np
@@ -203,6 +204,8 @@ class ClapEmbedder:
         self,
         audios: Sequence[NDArray[np.float32]],
         sample_rate: int = DEFAULT_SAMPLE_RATE,
+        *,
+        on_progress: Callable[[str], None] | None = None,
     ) -> NDArray[np.float32]:
         """Embed mono audio arrays, returning shape ``(n_audio, 512)``."""
 
@@ -232,12 +235,20 @@ class ClapEmbedder:
         if not prepared:
             return np.empty((0, CLAP_EMBEDDING_DIM), dtype=np.float32)
 
+        if on_progress is not None and not self.is_loaded:
+            on_progress(
+                f"  Loading CLAP {self.model_name}; downloading weights if not cached "
+                f"(requested device: {self.requested_device})"
+            )
         self._ensure_loaded()
         assert self._processor is not None
         assert self._model is not None
+        if on_progress is not None:
+            on_progress(f"  CLAP ready on {self._device}; batch size {self.batch_size}")
 
         batches: list[NDArray[np.float32]] = []
         for offset in range(0, len(prepared), self.batch_size):
+            batch_started = perf_counter()
             batch = prepared[offset : offset + self.batch_size]
             inputs = self._processor(
                 audios=batch,
@@ -250,6 +261,11 @@ class ClapEmbedder:
             with self._inference_context():
                 features = self._model.get_audio_features(**model_inputs)
             batches.append(self._normalize_and_validate(features, len(batch)))
+            if on_progress is not None:
+                on_progress(
+                    f"  CLAP: {offset + len(batch)}/{len(prepared)} windows "
+                    f"({perf_counter() - batch_started:.2f}s for this batch)"
+                )
 
         return np.concatenate(batches, axis=0)
 

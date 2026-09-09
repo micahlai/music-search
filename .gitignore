@@ -15,6 +15,7 @@ build/
 
 # Model and audio artifacts are local inputs, never repository assets.
 audio/
+audio-small/
 models/
 *.aac
 *.flac

@@ -231,12 +231,18 @@ The executable name is `music-search`. It must expose:
 ```text
 music-search db-upgrade
 music-search ingest PATH [--artist NAME] [--force] [--fail-fast]
+                         [--verbose | --quiet]
 music-search search [PROMPT] [--limit N] [--json]
 ```
 
 - **CLI-001** `db-upgrade` must apply migrations to the configured database.
 - **CLI-002** `ingest` must report ingested, skipped, and failed counts and identify
   per-file failures without printing tracebacks during normal errors.
+- **CLI-002a** Ingestion must print progress immediately by default: discovery count,
+  current file/total, duplicate detection, decoding, window count, CLAP model loading
+  and device, completed embedding batches, DSP progress, database save, and elapsed
+  stage/file/run times. `--quiet` suppresses these progress messages while preserving
+  the final table, totals, and failure exit status; `--verbose` explicitly enables them.
 - **CLI-003** `ingest --fail-fast` must stop after the first failed file.
 - **CLI-004** `search` without a prompt argument must request one interactively.
 - **CLI-005** Human output should be a readable ranked table; JSON output must be

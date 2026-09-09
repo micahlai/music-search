@@ -7,7 +7,7 @@ test success from being mistaken for music-search quality.
 | ID | Milestone | Depends on | Initial status |
 | --- | --- | --- | --- |
 | M0 | Scope and technical contract | None | Validated with Astra |
-| M1 | Local Python retrieval prototype | M0 | Implemented; offline checks passed; live gates pending |
+| M1 | Local Python retrieval prototype | M0 | Validated: 53 tests and real CLAP/pgvector on 20 tracks |
 | M2 | Real-catalog relevance baseline | M1 | Planned |
 | M3 | Structured LLM queries | M2 | Planned |
 | M4 | Music representation experiments | M2 | Planned |
@@ -43,6 +43,12 @@ Exit evidence:
 Risks: model download/compute footprint, decoder availability, stale model identity,
 approximate index recall, and silent/short audio. Unit tests do not close the real
 database/model gates. Missing runtime infrastructure must be reported explicitly.
+
+The live gates were exercised on 2026-09-09: 20 files from `audio-small` produced
+881 vectors; real CLAP searches and a duplicate-ingestion rerun passed. All 53
+tests passed with the separate pgvector test database enabled. See
+[SMOKE_TEST.md](SMOKE_TEST.md). This closes the starter runtime gates, not the M2
+relevance target.
 
 ## M2 — Prove relevance on 100–1,000 tracks
 

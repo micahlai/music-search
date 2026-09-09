@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
+from time import perf_counter
 from typing import Literal, Protocol
 from uuid import UUID
 
@@ -28,6 +29,8 @@ class AudioEmbedder(Protocol):
         self,
         audios: Sequence[NDArray[np.float32]],
         sample_rate: int,
+        *,
+        on_progress: Callable[[str], None] | None = None,
     ) -> NDArray[np.float32]: ...
 
 
@@ -123,6 +126,7 @@ class IngestionService:
         window_seconds: float = 10.0,
         stride_seconds: float = 5.0,
         analysis_version: str = ANALYSIS_VERSION,
+        on_progress: Callable[[str], None] | None = None,
     ) -> None:
         if sample_rate <= 0:
             raise ValueError("sample_rate must be positive")
@@ -139,6 +143,11 @@ class IngestionService:
         self.window_seconds = window_seconds
         self.stride_seconds = stride_seconds
         self.analysis_version = analysis_version
+        self.on_progress = on_progress
+
+    def _report(self, message: str) -> None:
+        if self.on_progress is not None:
+            self.on_progress(message)
 
     def ingest_path(
         self,
@@ -150,21 +159,32 @@ class IngestionService:
     ) -> IngestionSummary:
         """Discover and ingest files, isolating normal failures to one file."""
 
+        started = perf_counter()
+        self._report(f"Discovering audio in {path}")
         files = discover_audio_files(path)
+        self._report(f"Found {len(files)} supported audio files")
         results: list[FileIngestionResult] = []
-        for audio_path in files:
+        for index, audio_path in enumerate(files, start=1):
+            file_started = perf_counter()
+            self._report(f"[{index}/{len(files)}] {audio_path}")
             try:
-                results.append(self.ingest_file(audio_path, artist=artist, force=force))
+                result = self.ingest_file(audio_path, artist=artist, force=force)
             except Exception as exc:  # one bad asset should not discard its siblings
-                results.append(
-                    FileIngestionResult(
-                        path=audio_path,
-                        status="failed",
-                        error=f"{type(exc).__name__}: {exc}",
-                    )
+                result = FileIngestionResult(
+                    path=audio_path,
+                    status="failed",
+                    error=f"{type(exc).__name__}: {exc}",
                 )
-                if fail_fast:
-                    break
+            results.append(result)
+            elapsed = perf_counter() - file_started
+            detail = result.error or f"{result.segment_count} segments"
+            self._report(f"  {result.status.upper()}: {detail} ({elapsed:.2f}s)")
+            if result.status == "failed" and fail_fast:
+                self._report("Stopping after the first failure (--fail-fast)")
+                break
+        self._report(
+            f"Finished {len(results)}/{len(files)} files in {perf_counter() - started:.2f}s"
+        )
         return IngestionSummary(tuple(results))
 
     def ingest_file(
@@ -177,19 +197,28 @@ class IngestionService:
         """Analyze and persist one local file known to be authorized by the operator."""
 
         audio_path = Path(path).expanduser().resolve()
+        self._report("  Hashing file and checking for existing analysis")
         digest = content_sha256(audio_path)
         existing = self.repository.find_track_by_content_hash(digest)
         if existing is not None and not force:
+            self._report("  Duplicate SHA-256: keeping existing analysis")
             return FileIngestionResult(
                 path=audio_path,
                 status="skipped",
                 track_id=existing.id,
                 segment_count=len(existing.segments),
             )
-
+        if existing is not None:
+            self._report("  Reanalyzing existing track (--force)")
+        self._report(f"  Decoding and resampling to mono {self.sample_rate} Hz")
+        stage_started = perf_counter()
         audio = decode_audio(audio_path, target_sample_rate=self.sample_rate)
         if audio.samples.size == 0:
             raise ValueError("decoded audio is empty")
+        self._report(
+            f"  Decoded {audio.duration_seconds:.2f}s of audio "
+            f"({perf_counter() - stage_started:.2f}s)"
+        )
 
         windows = split_audio(
             audio.samples,
@@ -199,17 +228,26 @@ class IngestionService:
         )
         if not windows:
             raise ValueError("audio produced no analysis windows")
+        self._report(
+            f"  Created {len(windows)} windows "
+            f"({self.window_seconds:g}s window / {self.stride_seconds:g}s stride)"
+        )
 
+        stage_started = perf_counter()
         vectors = self.embedder.embed_audio(
             [window.samples for window in windows],
             sample_rate=audio.sample_rate,
+            on_progress=self.on_progress,
         )
         if vectors.ndim != 2 or vectors.shape[0] != len(windows):
             raise RuntimeError(
                 "embedder returned an unexpected batch shape: "
                 f"expected {len(windows)} rows, got {vectors.shape}"
             )
+        self._report(f"  Embeddings complete ({perf_counter() - stage_started:.2f}s)")
 
+        stage_started = perf_counter()
+        self._report(f"  Computing RMS/BPM for {len(windows)} segments")
         segments: list[SegmentWrite] = []
         for window, vector in zip(windows, vectors, strict=True):
             valid_samples = window.samples[: window.valid_sample_count]
@@ -224,9 +262,15 @@ class IngestionService:
                     embedding=vector.tolist(),
                 )
             )
+            if len(segments) % 10 == 0 or len(segments) == len(windows):
+                self._report(f"  DSP: {len(segments)}/{len(windows)} segments")
 
+        self._report("  Estimating whole-track BPM")
         track_features = extract_dsp_features(audio.samples, audio.sample_rate)
+        self._report(f"  DSP complete ({perf_counter() - stage_started:.2f}s)")
         title, inferred_artist = infer_title_artist(audio_path, artist)
+        stage_started = perf_counter()
+        self._report("  Saving track and segments in one database transaction")
         stored = self.repository.replace_track(
             TrackWrite(
                 source_uri=audio_path.as_uri(),
@@ -249,6 +293,7 @@ class IngestionService:
                 segments=segments,
             )
         )
+        self._report(f"  Saved track {stored.id} ({perf_counter() - stage_started:.2f}s)")
         return FileIngestionResult(
             path=audio_path,
             status="ingested",

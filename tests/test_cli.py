@@ -52,3 +52,39 @@ def test_blank_prompt_is_rejected_before_setup(monkeypatch) -> None:
     result = runner.invoke(cli.app, ["search", " "])
     assert result.exit_code == 1
     repository.assert_not_called()
+
+
+@pytest.mark.parametrize("quiet", [False, True])
+def test_ingestion_progress_is_live_by_default_and_quiet_is_optional(
+    quiet, tmp_path, monkeypatch
+) -> None:
+    (tmp_path / "[red]example.wav").touch()
+    repo = Mock()
+
+    def fail_lookup(_digest):
+        # Verify progress was printed before the blocking database operation.
+        if not quiet:
+            assert any("Hashing" in message for message in observed)
+        raise ValueError("database unavailable")
+
+    repo.find_track_by_content_hash.side_effect = fail_lookup
+    monkeypatch.setattr(cli, "_repository", lambda _: repo)
+    monkeypatch.setattr(cli, "_embedder", lambda _: Mock())
+    observed: list[str] = []
+    original_print = cli.console.print
+
+    def capture(message, *args, **kwargs):
+        if isinstance(message, str):
+            observed.append(message)
+        original_print(message, *args, **kwargs)
+
+    monkeypatch.setattr(cli.console, "print", capture)
+    args = ["ingest", str(tmp_path)] + (["--quiet"] if quiet else [])
+    result = runner.invoke(cli.app, args)
+    assert result.exit_code == 1
+    assert "database unavailable" in result.output
+    assert "failed 1" in result.output
+    assert ("Found 1 supported audio files" in result.output) is not quiet
+    if not quiet:
+        assert "[red]example.wav" in result.output
+        assert "FAILED:" in result.output

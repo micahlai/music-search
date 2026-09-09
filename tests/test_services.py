@@ -47,11 +47,15 @@ def test_duplicate_skip_then_force_replaces_complete_tail(tmp_path: Path, monkey
     repository.replace_track.side_effect = lambda track: SimpleNamespace(
         id=UUID(int=1), segments=track.segments
     )
-    service = IngestionService(repository, embedder, sample_rate=2)
+    progress: list[str] = []
+    service = IngestionService(repository, embedder, sample_rate=2, on_progress=progress.append)
     assert service.ingest_file(path).status == "skipped"
     decode.assert_not_called()
     embedder.embed_audio.assert_not_called()
+    assert any("Duplicate SHA-256" in message for message in progress)
+    assert not any("Decoding" in message for message in progress)
 
+    progress.clear()
     assert service.ingest_file(path, force=True).segment_count == 2
     written = repository.replace_track.call_args.args[0]
     assert written.bpm is None
@@ -60,6 +64,10 @@ def test_duplicate_skip_then_force_replaces_complete_tail(tmp_path: Path, monkey
     assert [(s.start_seconds, s.end_seconds) for s in written.segments] == [(0, 10), (5, 12)]
     assert measured_lengths == [20, 14, 24]  # tail DSP must exclude model-input padding
     assert all(s.bpm is None for s in written.segments)
+    assert any("Created 2 windows" in message for message in progress)
+    assert any("DSP: 2/2" in message for message in progress)
+    assert "Saved track" in progress[-1]
+    assert embedder.embed_audio.call_args.kwargs["on_progress"] == progress.append
 
 
 def test_corrupt_file_isolation_and_fail_fast(tmp_path: Path, monkeypatch) -> None:
