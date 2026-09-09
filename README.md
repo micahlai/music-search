@@ -164,6 +164,8 @@ real-model smoke testing, and the 100–1,000-track relevance benchmark.
 - [Architecture](docs/ARCHITECTURE.md): component boundaries and Python/Vercel decisions.
 - [Milestones](docs/MILESTONES.md): staged deliverables and validation gates.
 - [Roadmap](docs/ROADMAP.md): LLM parsing, MERT, structure, connectors, and website.
+- [Retrieval design](docs/RETRIEVAL_DESIGN.md): measured ranking diagnosis, checkpoint
+  and calibration ablation, analysis layers, and vector storage budget.
 - [Validation record](docs/VALIDATION.md): Astra review, executed checks, and pending live gates.
 
 Python remains the intended implementation and test language for ML/audio services.
